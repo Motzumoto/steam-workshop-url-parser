@@ -10,27 +10,28 @@ def fetch_and_parse(url):
     }
 
     try:
-        return extract_mod_and_workshop_ids(url, headers)
+        return extract_mod_workshop_and_vehicle_ids(url, headers)
     except requests.RequestException as e:
         print(f"Error fetching {url}. Error: {str(e)}")
-        return [], []
+        return [], [], []
 
     except Exception as e:
         print(f"General error for {url}. Error: {str(e)}")
-        return [], []
+        return [], [], []
 
 
-def extract_mod_and_workshop_ids(url, headers):
+def extract_mod_workshop_and_vehicle_ids(url, headers):
     response = requests.get(url, headers=headers, timeout=10)
     if response.status_code != 200:
         print(f"Failed to fetch {url} with status code: {response.status_code}")
-        return [], []
+        return [], [], []
 
     soup = BeautifulSoup(response.text, "html.parser")
     description = soup.select_one(".workshopItemDescription").text
 
     mod_ids = []
     workshop_ids = []
+    vehicle_ids = []
 
     lines = description.split("\n")
     for line in lines:
@@ -42,13 +43,17 @@ def extract_mod_and_workshop_ids(url, headers):
             workshop_id = line.split(":")[-1].strip()
             if workshop_id.isdigit():
                 workshop_ids.append(workshop_id)
+        elif "Vehicle IDs:" in line:
+            vehicle_id_line = line.split(":")[-1].strip()
+            vehicle_id_list = vehicle_id_line.split(", ")
+            vehicle_ids.extend(vehicle_id_list)
 
     # In case the Workshop ID isn't in the description
     if not workshop_ids:
-        workshop_id_from_url = url.split("?id=")[-1]
+        workshop_id_from_url = url.split("?id=")[-1].split("&")[0]
         workshop_ids.append(workshop_id_from_url)
 
-    return workshop_ids, mod_ids
+    return workshop_ids, mod_ids, vehicle_ids
 
 
 def main():
@@ -66,16 +71,20 @@ def main():
 
     all_mod_ids = []
     all_workshop_ids = []
+    all_vehicle_ids = []
 
     for url in urls:
-        workshop_ids, mod_ids = fetch_and_parse(url)
+        workshop_ids, mod_ids, vehicle_ids = fetch_and_parse(url)
         all_mod_ids.extend(mod_ids)
         all_workshop_ids.extend(workshop_ids)
+        all_vehicle_ids.extend(vehicle_ids)
         time.sleep(1)  # 1-second delay between requests
 
     print("\nParsed Information:")
     print("Mods=" + ";".join(all_mod_ids))
     print("WorkshopItems=" + ";".join(all_workshop_ids))
+    if all_vehicle_ids:
+        print("VehicleIDs=" + ";".join(all_vehicle_ids))
 
 
 if __name__ == "__main__":
