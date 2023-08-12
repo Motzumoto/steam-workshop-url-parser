@@ -1,10 +1,13 @@
+import time
+
 import requests
 from bs4 import BeautifulSoup
-import time
+
 
 def fetch_and_parse(url):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
 
     try:
         return extract_mod_and_workshop_ids(url, headers)
@@ -16,13 +19,14 @@ def fetch_and_parse(url):
         print(f"General error for {url}. Error: {str(e)}")
         return [], []
 
+
 def extract_mod_and_workshop_ids(url, headers):
     response = requests.get(url, headers=headers, timeout=10)
     if response.status_code != 200:
         print(f"Failed to fetch {url} with status code: {response.status_code}")
         return [], []
 
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(response.text, "html.parser")
     description = soup.select_one(".workshopItemDescription").text
 
     mod_ids = []
@@ -46,9 +50,12 @@ def extract_mod_and_workshop_ids(url, headers):
 
     return workshop_ids, mod_ids
 
+
 def main():
     print("Welcome to the Steam Workshop URL Parser!")
-    print("Enter the mod URLs one by one. Type 'DONE' when you have finished entering all the URLs.")
+    print(
+        "Enter the mod URLs one by one. Type 'DONE' when you have finished entering all the URLs."
+    )
     urls = []
 
     while True:
@@ -69,6 +76,7 @@ def main():
     print("\nParsed Information:")
     print("Mods=" + ";".join(all_mod_ids))
     print("WorkshopItems=" + ";".join(all_workshop_ids))
+
 
 if __name__ == "__main__":
     main()
