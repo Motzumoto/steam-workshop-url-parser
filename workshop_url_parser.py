@@ -43,7 +43,6 @@ def extract_mod_and_workshop_ids(url, headers):
     for _, mod_id in mod_id_matches:
         mod_ids.append(mod_id.strip())
 
-
     # Extracting Vehicle IDs from the mod's description
     vehicle_id_matches = re.findall(r"Vehicle IDs: ([a-zA-Z0-9_, ]+)", description)
     if vehicle_id_matches:
