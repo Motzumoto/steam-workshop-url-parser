@@ -15,7 +15,7 @@ This tool is designed for server admins and mod enthusiasts who want to easily r
 
 ## Requirements
 
-- Python 3
+- Python 3.6+
 - `requests` and `beautifulsoup4` libraries
 
 ## Installation

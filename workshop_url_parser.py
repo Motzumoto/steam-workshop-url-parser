@@ -1,38 +1,65 @@
 import re
 import time
+from typing import Any, Dict, List, Tuple
 
-import requests
-from bs4 import BeautifulSoup
+NAME: str = "Steam Workshop URL Parser"
+GITHUB_URL: str = f"https://github.com/Motzumoto/{NAME.lower().replace(' ', '-')}"
 
 
-def extract_modpack_mods(url, headers):
+def _with_python_path(package_name: str, /) -> str:
+    import sys
+
+    return f"'{sys.executable} -m pip install {package_name}'"
+
+
+try:
+    import requests  # type: ignore
+except ImportError:
+    print(f"Please install the 'requests' package using the following: {_with_python_path('requests')}")
+    exit(1)
+try:
+    import bs4  # type: ignore
+except ImportError:
+    print(f"Please install the 'beautifulsoup4' package using the following: {_with_python_path('beautifulsoup4')}")
+    exit(1)
+
+del _with_python_path
+
+
+def extract_modpack_mods(url: str, headers: Dict[str, Any]) -> List[str]:
     response = requests.get(url, headers=headers, timeout=10)
     if response.status_code != 200:
-        print(
-            f"Failed to fetch mod pack {url} with status code: {response.status_code}"
-        )
+        print(f"Failed to fetch mod pack {url} with status code: {response.status_code}")
         return []
-    soup = BeautifulSoup(response.text, "html.parser")
-    mod_divs = soup.select('[id^="sharedfile_"]')
-    return [
-        "https://steamcommunity.com/sharedfiles/filedetails/?id="
-        + mod_div["id"].replace("sharedfile_", "")
-        for mod_div in mod_divs
-    ]
+
+    soup = bs4.BeautifulSoup(response.text, "html.parser")
+    mod_divs: bs4.ResultSet[bs4.Tag] = soup.select('[id^="sharedfile_"]')
+
+    divs: List[str] = []
+    for mod_div in mod_divs:
+        aid = mod_div["id"]
+        _id = (aid[0] if isinstance(aid, list) else aid).replace("sharedfile_", "")
+        divs.append(f"https://steamcommunity.com/sharedfiles/filedetails/?id={_id}")
+
+    return divs
 
 
-def extract_mod_and_workshop_ids(url, headers):
+def extract_mod_and_workshop_ids(url: str, headers: Dict[str, Any]) -> Tuple[List[str], List[str], List[str]]:
     response = requests.get(url, headers=headers, timeout=10)
     if response.status_code != 200:
         print(f"Failed to fetch {url} with status code: {response.status_code}")
         return [], [], []
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    description = soup.select_one(".workshopItemDescription").text
+    soup = bs4.BeautifulSoup(response.text, "html.parser")
+    try:
+        description = soup.select_one(".workshopItemDescription").text
+    except AttributeError:
+        print(f"Failed to find the description for {url}")
+        return [], [], []
 
-    mod_ids = []
-    workshop_ids = []
-    vehicle_ids = []
+    mod_ids: List[str] = []
+    workshop_ids: List[str] = []
+    vehicle_ids: List[str] = []
 
     # Adjusted regex for capturing Mod IDs
     mod_id_matches = re.findall(
@@ -66,27 +93,47 @@ def extract_mod_and_workshop_ids(url, headers):
         workshop_id_from_url = url.split("?id=")[-1].split("&")[0]
         workshop_ids.append(workshop_id_from_url)
 
-    print(f"Collected Workshop IDs: {workshop_ids}")
-    print(f"Collected Mod IDs: {', '.join(mod_ids)}")
-    if vehicle_ids:
-        # Joining vehicle IDs with semicolons
-        print(f"Collected Vehicle IDs: {';'.join(vehicle_ids)}")
-
+    print(
+        f"Collected Workshop IDs: {workshop_ids}",
+        f"Collected Mod IDs: {', '.join(mod_ids)}",
+        (f"Collected Vehicle IDs: {';'.join(vehicle_ids)}") if vehicle_ids else "",
+        sep="\n",
+    )
     return workshop_ids, mod_ids, vehicle_ids
 
 
 def main():
-    print("Welcome to the Steam Workshop URL Parser!")
-    print(
-        "Enter the mod URLs one by one. Type 'DONE' when you have finished entering all the URLs."
-    )
-    urls = []
+    BASE_URL = "https://steamcommunity.com/"
+    WELCOME_MESSAGE: str = f"Welcome to the {NAME}!"
 
+    print(f"{WELCOME_MESSAGE}\n{'-' * len(WELCOME_MESSAGE)}")
+    print("Enter the mod URLs one by one. Type 'DONE` when you have finished entering all the URLs.")
+
+    urls = []
     while True:
-        url = input("Enter a mod URL or a modpack URL: ")
+        msg = f"[{len(urls)}] Enter another Mod/Modpack URL or type 'DONE' to finish: "
+        if not urls:
+            msg = "Enter a Mod/Modpack URL: "
+
+        url = input(msg).strip()
         if url == "DONE":
             break
+        if not url:
+            print("URL cannot be empty!")
+            continue
+        if url in urls:
+            print("URL already entered!")
+            continue
+
+        if not url.startswith(BASE_URL) or url == BASE_URL:
+            print(f"URL must start with {BASE_URL}")
+            continue
+
         urls.append(url)
+
+    if not urls:
+        print("\nNo URLs entered. Exiting...")
+        exit(1)
 
     all_mod_ids = []
     all_workshop_ids = []
@@ -99,21 +146,32 @@ def main():
     for url in urls:
         mod_urls = extract_modpack_mods(url, headers) if "/?id=" in url else [url]
         for mod_url in mod_urls:
-            workshop_ids, mod_ids, vehicle_ids = extract_mod_and_workshop_ids(
-                mod_url, headers
-            )
+            workshop_ids, mod_ids, vehicle_ids = extract_mod_and_workshop_ids(mod_url, headers)
             all_workshop_ids.extend(workshop_ids)
             all_mod_ids.extend(mod_ids)
             all_vehicle_ids.extend(vehicle_ids)
             print(f"Processed URL: {mod_url}")
             time.sleep(1)  # 1-second delay between requests
 
-    print("\nParsed Information:")
-    print("Mods=" + ";".join(all_mod_ids))
-    print("WorkshopItems=" + ";".join(all_workshop_ids))
-    if all_vehicle_ids:
-        print("VehicleIDs=" + ";".join(all_vehicle_ids))
+    print(
+        "\nParsed Information:\n------------------",
+        "Mods: " + ";".join(all_mod_ids),
+        "WorkshopItems: " + ";".join(all_workshop_ids),
+        ("VehicleIDs: " + ";".join(all_vehicle_ids)) if all_vehicle_ids else "",
+        sep="\n",
+    )
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\nKeyboardInterrupt detected. Exiting...")
+    finally:
+        BASE_MESSAGE = f"Thank you for using the {NAME}."
+        STAR_MESSAGE = f"Please consider giving it a ⭐ Star on GitHub if you found it useful:"
+        print(
+            "-" * (len(STAR_MESSAGE) + 5),
+            f"\n{BASE_MESSAGE}\n{STAR_MESSAGE}\n{GITHUB_URL}\n",
+            "-" * (len(STAR_MESSAGE) + 5),
+        )
